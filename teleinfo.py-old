@@ -1,0 +1,239 @@
+#=============================================================
+#
+#=============================================================
+from flask import Flask, url_for, render_template, redirect, jsonify
+import sys, time, datetime
+
+devicePath = "/dev/ttyAMA0"
+fd=0
+
+app = Flask(__name__)
+
+#-------------------------------------------------------------
+# Le tableau associatif teleinfo contient les informations lues
+# dans la derniere trame recue.
+#-------------------------------------------------------------
+teleinfo = {}
+
+consommation = {}
+
+#-------------------------------------------------------------
+#   Initialisation du port serie
+#-------------------------------------------------------------
+def initSerialPort():
+   import termios, os
+#   print("Initialisation du port serie\n");
+
+   fd = os.open(devicePath, os.O_RDWR | os.O_NOCTTY)
+
+#   print "Descripteur " + str(fd)+ " ouvert\n" 
+
+   old = termios.tcgetattr(fd)
+#   print "Etat : ", old
+   new = termios.tcgetattr(fd)
+
+   # c_iflags
+   new[0] = new[0] | (termios.INPCK | termios.ISTRIP)
+   new[0] = new[0] & ~(termios.IXON | termios.IXOFF | termios.IXANY | termios.ICRNL)
+
+   # c_oflags
+   new[1] = new[1] & ~termios.OPOST
+
+   # c_cflags
+   new[2] = new[2] &  ~termios.CSIZE
+   new[2] = new[2] | termios.CLOCAL | termios.CREAD | termios.PARENB | termios.CS7
+   new[2] = new[2] &  ~termios.PARODD
+   new[2] = new[2] &  ~termios.CSTOPB
+   new[2] = new[2] &  ~termios.CRTSCTS
+
+   # c_lfags
+   new[3] = new[3] & ~(termios.ECHO | termios.ICANON | termios.ECHOE | termios.ISIG)
+
+   # ispeed
+   new[4] = termios.B1200
+
+   # ospeed
+   new[5] = termios.B1200
+
+   # cc
+   new[6][termios.VMIN] = 0
+   new[6][termios.VTIME] = 80
+
+   # flush
+   termios.tcflush(fd, termios.TCIOFLUSH)
+
+   #on applique
+   termios.tcsetattr(fd, termios.TCSANOW, new)
+
+   return fd
+
+#-------------------------------------------------------------
+#   Lecture d'une trame depuis l'interface serie. La trame
+# est retournee sous forme d'une chaine de caracteres.
+#-------------------------------------------------------------
+def teleinfoReadFrame():
+   import os
+#   print("Lecture d'une trame dans fd " + str(fd) + "\n");
+
+#   print("On attend la fin de la trame en cours\n")
+   c = os.read(fd, 1)
+   cp = c
+#   sys.stdout.write(hex(ord(c)) + " ")
+   n = 0
+   while (not((ord(c) == 0x02) and (ord(cp) == 0x03))) :
+      cp = c
+      c = os.read(fd, 1)
+#      sys.stdout.write(hex(ord(c)) + " ")
+      if (n == 7):
+#         sys.stdout.write("\n")
+         n = 0
+      else :
+         n = n + 1 
+
+#   print("On passe a la suite\n")
+   c = os.read(fd, 1)
+   trame = ""
+   while (not(ord(c) == 0x03)) :
+      trame = trame + c
+      c = os.read(fd, 1)
+
+   return trame
+
+#-------------------------------------------------------------
+#   Initialisation de la consommation (WARNING A VIRER ?)
+#-------------------------------------------------------------
+def initConsommation() :
+   consommation['HCreuseJBleu'] = 0
+   consommation['HPleineJBleu'] = 0
+   consommation['HCreuseJBlanc'] = 0
+   consommation['HPleineJBlanc'] = 0
+   consommation['HCreuseJRouge'] = 0
+   consommation['HPleineJRouge'] = 0
+   consommation['date'] = datetime.datetime.now()
+
+#-------------------------------------------------------------
+#   Lecture d'une trame que l'on va transformer en dictionnaire
+# dans la variable teleinfo qui est renvoyee.
+#   Une estampille temporelle est ajoutee, au format time.time()
+# de python, en attendant mieux
+#------------------------------------------------------------- 
+def parseFrameToTeleinfo(frame) :
+   teleinfo = {
+      'TIME' : time.time()
+   }
+   for line in frame.split('\n') :
+#      print "Ligne " + line
+      if (len(line) > 0 ) : 
+         mots = line.split(' ')
+         # ATTENTION checksum
+#         sys.stdout.write("CMD " + mots[0] + " Val " + mots[1] + " cs " + mots[2] + "\n")
+         teleinfo[mots[0]] =  mots[1]
+         if (mots[0] == 'BBRHCJB') :
+             consommation['HCreuseJBleu'] = int(mots[1])
+         elif (mots[0] == 'BBRHPJB') :
+            teleinfo[mots[0]] =  int(mots[1])
+            consommation['HPleineJBleu'] = int(mots[1])
+         elif (mots[0] == 'BBRHCJW') :
+            teleinfo[mots[0]] =  int(mots[1])
+            consommation['HCreuseJBlanc'] = int(mots[1])
+         elif (mots[0] == 'BBRHPJW') :
+            teleinfo[mots[0]] =  int(mots[1])
+            consommation['HPleineJBlanc'] = int(mots[1])
+         elif (mots[0] == 'BBRHCJR') :
+            teleinfo[mots[0]] =  int(mots[1])
+            consommation['HCreuseJRouge'] = int(mots[1])
+         elif (mots[0] == 'BBRHPJR') :
+            teleinfo[mots[0]] =  int(mots[1])
+            consommation['HPleineJRouge'] = int(mots[1])
+
+   return teleinfo
+
+#-------------------------------------------------------------
+#   Affichage d'un teleinfo (pour debogage)
+#-------------------------------------------------------------
+def printTeleinfo(teleinfo) :
+   print "Type de contrat   : " + teleinfo['OPTARIF']
+   print "Couleur de demain : " + teleinfo['DEMAIN']
+   print "Tarif en cours    : " + teleinfo['PTEC']
+   print "Intensite         : " + teleinfo['IINST']
+   
+#========================================================
+# Gestion de l'interface web
+#========================================================
+#--------------------------------------------------------
+# La page principale
+#--------------------------------------------------------
+@app.route("/")
+def hello():
+   templateData = {
+      'version' : "0.2",
+      'BBRHPJB' : teleinfo['BBRHPJB'],
+      'BBRHPJW' : teleinfo['BBRHPJW'],
+      'BBRHPJR' : teleinfo['BBRHPJR'],
+      'BBRHCJB' : teleinfo['BBRHCJB'],
+      'BBRHCJW' : teleinfo['BBRHCJW'],
+      'BBRHCJR' : teleinfo['BBRHCJR'],
+   }
+   return render_template('main.html', **templateData)
+
+#--------------------------------------------------------
+# La route suivante permet d'acceder a toutes les valeurs
+# de la derniere trame lue. clef est le nom du label de
+# la trame. La page fournie contient simplement la valeur
+# sans fioriture
+#--------------------------------------------------------
+@app.route("/teleinfo/<clef>")
+def lireClef(clef):
+   templateData = {
+      'clef' : clef,
+      'valeur' : teleinfo[clef]
+   }
+   return render_template('clef.html', **templateData)
+
+@app.route("/puissance/<clef>")
+def puissance(clef):
+   global teleinfo
+
+   # On fait une nouvelle lecture
+   print "On en lit une autre"
+   newTeleinfo = parseFrameToTeleinfo(teleinfoReadFrame())
+   print "Quelle energie ?"
+   print "Avant " + str(teleinfo[clef])
+   print "Apres " + str(newTeleinfo[clef])
+
+   # L'energie consommee sur la periode
+   energie = int(newTeleinfo[clef]) - int(teleinfo[clef]) 
+   print "Energie " + str(energie)
+
+   # La puissance moyenne est l'energie totale sur la duree
+   puissance = energie * 3600.0 / (newTeleinfo['TIME'] - teleinfo['TIME'])
+   print " Puissance " + str (puissance)
+
+   # La derniere lecture devient la courante
+   teleinfo = newTeleinfo
+
+   templateData = {
+      'clef' : clef,
+      'puissance' : puissance
+   }
+   now = datetime.datetime.now()
+   coord = {}
+   coord['x'] = now.hour*60 + now.minute
+   coord['y'] = puissance
+   print "On envoie x = "+str(coord['x']) + " y = " + str(coord['y'])
+   return jsonify(point=coord)
+
+#   return render_template('puissance.html', **templateData)
+
+#=============================================================
+#
+#=============================================================
+print("Coucou\n");
+fd=initSerialPort();
+frame = teleinfoReadFrame();
+teleinfo = parseFrameToTeleinfo(frame)
+#printTeleinfo(teleinfo)
+
+if __name__ == "__main__":
+   app.run(host='0.0.0.0', port=8081, debug=True)
+

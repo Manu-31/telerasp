@@ -1,0 +1,7 @@
+      <div id="menu">
+         <ul id="choix">
+            <li class="active"><a href="{{ url_for('consojournaliere', when='yesterday') }}">Hier</a></li>
+            <li class="active"><a href="{{ url_for('consojournaliere', when='today') }}">Aujourd'hui</a></li>
+            <li><a href="{{ url_for('consojournaliere', when='last') }}">Dernières 24 heures</a></li>
+         </ul>
+      </div>

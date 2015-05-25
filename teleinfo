@@ -1,0 +1,32 @@
+#! /bin/sh
+# /etc/init.d/teleinfo
+#
+# Installer via update-rc.d teleinfo defaults
+
+SRV_PATH=/home/pi/EDF/TeleRasp/teleinfo.py
+PYTHON=/usr/bin/python
+
+# Some things that run always
+touch /var/lock/teleinfo
+PIDFILE=/var/run/teleinfo.pid
+
+# Carry out specific functions when asked to by the system
+case "$1" in
+  start)
+    echo "Starting script teleinfo "
+    #start-stop-daemon --background --make-pidfile --pidfile $PIDFILE --start --exec $PYTHON
+ $SRV_PATH
+    start-stop-daemon --background --start --exec $PYTHON $SRV_PATH
+    ;;
+  stop)
+    echo "Stopping script teleinfo"
+    #start-stop-daemon --pidfile $PIDFILE --stop $PYTHON $SRV_PATH
+    start-stop-daemon --stop --exec $PYTHON $SRV_PATH
+    ;;
+  *)
+    echo "Usage: /etc/init.d/teleinfo {start|stop}"
+    exit 1
+    ;;
+esac
+
+exit 0

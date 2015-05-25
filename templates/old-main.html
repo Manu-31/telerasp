@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html>
+   <head>
+      <title>Version {{version}}</title>
+   </head>
+   <body>
+
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
+<script src="http://code.highcharts.com/highcharts.js"></script>
+<script src="http://code.highcharts.com/highcharts-more.js"></script>
+<script src="http://code.highcharts.com/modules/solid-gauge.src.js"></script>
+
+<div id="container-iinst" style="width:300px; height:300px;"></div>
+<div id="container-cumul" style="width:400px; height:200px;"></div>
+<div id="container-puissance" style="width:800px; height:400px;"></div>
+
+<script>
+$(function () { 
+    $('#container-cumul').highcharts({
+        chart: {
+            type: 'bar'
+        },
+        title: {
+            text: 'Cumul de consommation énergétique'
+        },
+        xAxis: {
+            categories: ['Bleu', 'Blanc', 'Rouge']
+        },
+        yAxis: {
+            title: {
+                text: "Cumul d'énergie (Watt.Heure)"
+            }
+        },
+        series: [{
+            name: 'Heures pleines',
+            data: [{{BBRHPJB}}, {{BBRHPJW}}, {{BBRHPJR}}]
+        }, {
+            name: 'Heures creuses',
+            data: [{{BBRHCJB}}, {{BBRHCJW}}, {{BBRHCJR}}]
+        }]
+    });
+
+    $('#container-iinst').highcharts({
+        chart: {
+            type: 'solidgauge',
+            events: {
+                load: lireIinst
+            }
+        },
+
+        title: null,
+
+        pane: {
+            center: ['50%', '85%'],
+            size: '100%',
+            startAngle: -90,
+            endAngle: 90,
+            background: {
+                backgroundColor: (Highcharts.theme && Highcharts.theme.background2) || '#EEE',
+                innerRadius: '60%',
+                outerRadius: '100%',
+                shape: 'arc'
+            }
+        },
+
+        tooltip: {
+            enabled: false
+        },
+
+        // the value axis
+        yAxis: {
+            stops: [
+                [0.1, '#55BF3B'], // green
+                [0.5, '#DDDF0D'], // yellow
+                [0.9, '#DF5353'] // red
+            ],
+            lineWidth: 0,
+            minorTickInterval: null,
+            tickPixelInterval: 400,
+            tickWidth: 0,
+            title: {
+                y: -70
+            },
+            labels: {
+                y: 16
+            },
+            min: 0,
+            max: {{ISOUSC}},
+            title: {
+                text: 'IINST'
+            }
+        },
+        series: [{
+            name: 'IINST',
+            data: [1],
+            dataLabels: {
+                format: '<div style="text-align:center"><span style="font-size:25px;color:' +
+                    ((Highcharts.theme && Highcharts.theme.contrastTextColor) || 'black') + '">{y:.1f}</span><br/>' +
+                       '<span style="font-size:12px;color:silver">contrat : {{ISOUSC}} A</span></div>'
+            },
+            tooltip: {
+                valueSuffix: ' revolutions/min'
+            }
+        }],
+
+        plotOptions: {
+            solidgauge: {
+                dataLabels: {
+                    y: 5,
+                    borderWidth: 0,
+                    useHTML: true
+                }
+            }
+        }
+    });
+
+});
+/**
+ * Request data from the server, add it to the graph and set a timeout 
+ * to request again
+ */
+function lirePuissance() {
+    $.ajax({
+/*        url: 'http://192.168.10.187:8081/json/PAPP',*/
+        url: 'http://192.168.10.187:8081/json/puissance/BBRHPJB',
+        success: function(point) {
+            var series = chartPuissance.series[0],
+                shift = series.data.length > 20; // shift if the series is 
+                                                 // longer than 20
+
+            //alert(typeof(point));
+            // add the point
+            chartPuissance.series[0].addPoint(point, true, shift);
+            
+            // call it again after 30 second
+            setTimeout(lirePuissance, 30000);    
+        },
+        cache: false
+    });
+}
+
+/**
+ On va chercher l'intensitée instantanée
+ */
+function lireIinst() {
+    $.ajax({
+        url: 'http://192.168.10.187:8081/json/IINST',
+        success: function(point) {
+            var chartIinst = $('#container-iinst').highcharts(),
+                series = chartIinst.series[0];
+
+            // add the point
+            series.addPoint(point, true, true);
+            
+            // call it again after 3 second
+            setTimeout(lireIinst, 3000);    
+        },
+        cache: false
+    });
+}
+
+$(document).ready(function() {
+    chartPuissance = new Highcharts.Chart({
+        chart: {
+            renderTo: 'container-puissance',
+            defaultSeriesType: 'spline',
+            events: {
+                load: lirePuissance
+            }
+        },
+        title: {
+            text: 'Puissance Apparente'
+        },
+        xAxis: {
+            type: 'datetime',
+            tickPixelInterval: 150,
+            maxZoom: 20 * 1000
+        },
+        yAxis: {
+            minPadding: 0.2,
+            maxPadding: 0.2,
+            title: {
+                text: 'Value',
+                margin: 80
+            }
+        },
+        series: [{
+            name: 'Puissance',
+            data: []
+        }]
+    });
+});
+</script>
+
+   </body>
+</html>
+

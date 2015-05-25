@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html>
+   <head>
+      {% include 'head.html' %}
+      <title>Version {{version}}</title>
+   </head>
+   <body>
+
+      {% include 'includes.html' %}
+      {% include 'menu.html' %}
+
+<div id="container-iinst" class="cont-gauge" style="width:300px; height:300px;"></div>
+<div id="container-papp" class="cont-gauge" style="width:300px; height:300px;"></div>
+
+<script>
+$(function () { 
+    $('#container-iinst').highcharts({
+        chart: {
+            type: 'solidgauge',
+            events: {
+                load: lireIinst
+            }
+        },
+
+        title: null,
+
+        pane: {
+            center: ['50%', '55%'],
+            size: '100%',
+            startAngle: -90,
+            endAngle: 90,
+            background: {
+                backgroundColor: (Highcharts.theme && Highcharts.theme.background2) || '#EEE',
+                innerRadius: '60%',
+                outerRadius: '100%',
+                shape: 'arc'
+            }
+        },
+
+        tooltip: {
+            enabled: false
+        },
+
+        // the value axis
+        yAxis: {
+            stops: [
+                [0.1, '#55BF3B'], // green
+                [0.5, '#DDDF0D'], // yellow
+                [0.9, '#DF5353'] // red
+            ],
+            lineWidth: 0,
+            minorTickInterval: null,
+            tickPixelInterval: 400,
+            tickWidth: 0,
+            title: {
+                y: -70
+            },
+            labels: {
+                y: 16
+            },
+            min: 0,
+            max: {{isousc}},
+            title: {
+                text: 'IINST'
+            }
+        },
+        series: [{
+            name: 'IINST',
+            data: [1],
+            dataLabels: {
+                format: '<div style="text-align:center"><span style="font-size:25px;color:' +
+                    ((Highcharts.theme && Highcharts.theme.contrastTextColor) || 'black') + '">{y:.1f}</span><br/>' +
+                       '<span style="font-size:12px;color:silver">contrat : {{isousc}} A</span></div>'
+            },
+            tooltip: {
+                valueSuffix: ' revolutions/min'
+            }
+        }],
+
+        plotOptions: {
+            solidgauge: {
+                dataLabels: {
+                    y: 5,
+                    borderWidth: 0,
+                    useHTML: true
+                }
+            }
+        }
+    });
+
+    $('#container-papp').highcharts({
+        chart: {
+            type: 'solidgauge',
+            events: {
+                load: lirePapp
+            }
+        },
+
+        title: null,
+
+        pane: {
+            center: ['50%', '55%'],
+            size: '100%',
+            startAngle: -90,
+            endAngle: 90,
+            background: {
+                backgroundColor: (Highcharts.theme && Highcharts.theme.background2) || '#EEE',
+                innerRadius: '60%',
+                outerRadius: '100%',
+                shape: 'arc'
+            }
+        },
+
+        tooltip: {
+            enabled: false
+        },
+
+        // the value axis
+        yAxis: {
+            stops: [
+                [0.1, '#55BF3B'], // green
+                [0.5, '#DDDF0D'], // yellow
+                [0.9, '#DF5353'] // red
+            ],
+            lineWidth: 0,
+            minorTickInterval: null,
+            tickPixelInterval: 400,
+            tickWidth: 0,
+            title: {
+                y: -70
+            },
+            labels: {
+                y: 16
+            },
+            min: 0,
+            max: {{pmax}},
+            title: {
+                text: 'PAPP'
+            }
+        },
+        series: [{
+            name: 'papp',
+            data: [1],
+            dataLabels: {
+                format: '<div style="text-align:center"><span style="font-size:25px;color:' +
+                    ((Highcharts.theme && Highcharts.theme.contrastTextColor) || 'black') + '">{y:.1f}</span><br/>' +
+                       '<span style="font-size:12px;color:silver">contrat : {{isousc}} A</span></div>'
+            },
+            tooltip: {
+                valueSuffix: ' revolutions/min'
+            }
+        }],
+
+        plotOptions: {
+            solidgauge: {
+                dataLabels: {
+                    y: 5,
+                    borderWidth: 0,
+                    useHTML: true
+                }
+            }
+        }
+    });
+});
+
+/**
+ * Request data from the server, add it to the graph and set a timeout 
+ * to request again
+
+function lirePuissance() {
+    $.ajax({
+        url: 'http://192.168.10.104:8081/json/puissance/bbrhpjb',
+        success: function(point) {
+            var series = chartPuissance.series[0],
+                shift = series.data.length > 20; // shift if the series is 
+                                                 // longer than 20
+
+            //alert(typeof(point));
+            // add the point
+            chartPuissance.series[0].addPoint(point, true, shift);
+            
+            // call it again after 30 second
+            setTimeout(lirePuissance, 30000);    
+        },
+        cache: false
+    });
+}
+ */
+
+/**
+ On va chercher l'intensitée instantanée
+ */
+function lireIinst() {
+    $.ajax({
+        url: 'http://192.168.10.104:8081/json/iinst',
+        success: function(point) {
+            var chartIinst = $('#container-iinst').highcharts(),
+                series = chartIinst.series[0];
+
+            // add the point
+            series.addPoint(point, true, true);
+            
+            // call it again after 3 second
+            setTimeout(lireIinst, 3000);    
+        },
+        cache: false
+    });
+};
+
+/**
+ On va chercher l'intensitée instantanée
+ */
+function lirePapp() {
+    $.ajax({
+        url: 'http://192.168.10.104:8081/json/papp',
+        success: function(point) {
+            var chartPapp = $('#container-papp').highcharts(),
+                series = chartPapp.series[0];
+
+            // add the point
+            series.addPoint(point, true, true);
+            
+            // call it again after 3 second
+            setTimeout(lirePapp, 3000);    
+        },
+        cache: false
+    });
+}
+</script>
+
+<table id="tarifs">
+   <caption>
+     Tarif actuel : {{ ptec }}
+   </caption>
+   <tr>
+      <td class="vide"></td>
+      <td class="bleu"> Bleu </td>
+      <td class="blanc"> Blanc </td>
+      <td class="rouge"> Rouge</td>
+   </tr>
+   <tr>
+      <td>Pleine</td>
+      <td class="bleu
+         {% if (ptec == 'HP') or (ptec == 'HPJB') %}
+         ptec
+         {% endif %}
+      ">  
+         {{ prixhpjb }}
+      </td>
+      <td class="blanc"> {{ prixhpjw }} </td>
+      <td class="rouge"> {{ prixhpjr }} </td>
+   </tr>
+   <tr>
+      <td>Creuse</td>
+      <td class="bleu
+         {% if (ptec == 'HC') or (ptec == 'HCJB') %}
+         ptec
+         {% endif %}
+      ">  {{ prixhcjb }} </td>
+      <td class="blanc"> {{ prixhcjw }} </td>
+      <td class="rouge"> {{ prixhcjr }} </td>
+   </tr>
+   <tr>
+      <td>Demain</td>
+      <td class="bleu">
+         {% if demain == 'BLEU' %}
+            BLEU
+         {% elif demain == '----' %}
+            ???
+         {% endif %}
+      </td>
+      <td class="blanc">
+         {% if demain == 'BLAN' %}
+            BLANC
+         {% elif demain == '----' %}
+            ???
+         {% endif %}
+      </td>
+      <td class="rouge"> 
+         {% if demain == 'ROUG' %}
+            ROUGE
+         {% elif demain == '----' %}
+            ???
+         {% endif %}
+      </td>
+   </tr>
+</table>
+
+   </body>
+</html>
+

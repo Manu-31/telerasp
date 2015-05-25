@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html>
+   <head>
+      <title>Version {{version}}</title>
+   </head>
+   <body>
+
+<script src="http://ajax.googleapis.com/ajax/libs/jquery/1.8.2/jquery.min.js"></script>
+<script src="http://code.highcharts.com/highcharts.js"></script>
+<script src="http://code.highcharts.com/highcharts-more.js"></script>
+<script src="http://code.highcharts.com/modules/solid-gauge.src.js"></script>
+
+<div id="container-cumul" style="width:400px; height:200px;"></div>
+
+<script>
+$(function () { 
+    $('#container-cumul').highcharts({
+        chart: {
+            type: 'bar'
+        },
+        title: {
+            text: 'Cumul de consommation énergétique'
+        },
+        xAxis: {
+            categories: ['Bleu', 'Blanc', 'Rouge']
+        },
+        yAxis: {
+            title: {
+                text: "Cumul d'énergie (Watt.Heure)"
+            }
+        },
+        series: [{
+            name: 'Heures pleines',
+            data: [{{bbrhpjb}}, {{bbrhpjw}}, {{bbrhpjr}}]
+        }, {
+            name: 'Heures creuses',
+            data: [{{bbrhcjb}}, {{bbrhcjw}}, {{bbrhcjr}}]
+        }]
+    });
+});
+
+</script>
+
+   </body>
+</html>
+

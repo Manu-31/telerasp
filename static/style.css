@@ -1,0 +1,137 @@
+#onglets
+{
+   font: bold 11px Batang, arial, serif;
+   list-style-type: none;
+   padding-bottom : 24px ;
+   border-bottom : 1px solid #9EA0A1 ;
+   margin-left : 0;
+}
+
+#onglets li
+{
+   float: left;
+   background-color: #F4F9FD ;
+   height : 21px ;
+   margin : 2px 2px 0 2px !important;
+   margin : 1px 2px 0 2px;
+   border : 1px solid #9EA0A1;
+}
+
+#onglets li.active
+{
+   border-bottom: 1px solid #fff;
+   background-color: #fff;
+}
+
+#onglets a
+{
+   display: block ;
+   color: #666;
+   text-decoration: none;
+   padding: 4px;
+}
+
+#onglets a:hover
+{
+   background: #fff;
+}
+
+#choix
+{
+   font: bold 11px Batang, arial, serif;
+   list-style-type: none;
+   padding-top : 0px ;
+   margin-top : 0px ;
+   border-top : 1px solid #9EA0A1 ;
+   margin-left : 0;
+}
+
+#choix li
+{
+   float: left;
+   background-color: #F4F9FD ;
+   height : 21px ;
+   margin : 0px 2px 2px 2px !important;
+   margin : 0px 2px 1px 2px;
+   border : 1px solid #9EA0A1;
+}
+
+#choix li.active
+{
+   border-top : 1px solid #fff;
+   background-color: #fff;
+}
+
+#choix a
+{
+   display: block ;
+   color: #666;
+   text-decoration: none;
+   padding: 4px;
+}
+
+#choix a:hover
+{
+   background: #fff;
+}
+
+/*==================================================================*/
+/* Affichage de la table des tarifs.                                */
+/*==================================================================*/
+#tarifs
+{
+   float : left ;
+/*   border:1px solid black;*/
+   border-collapse: collapse;
+}
+
+#tarifs caption
+{
+   font-weight: bold;
+}
+
+#tarifs td
+{
+   width : 60px;
+   border:1px solid black;
+   border-collapse: collapse;
+}
+
+#tarifs td.vide
+{
+   border:none;
+}
+
+#tarifs td.bleu
+{
+   background-color: #5CD6FF;   
+}
+
+#tarifs td.blanc
+{
+   background-color: #F0F0F0;   
+}
+
+#tarifs td.ptec
+{
+   border:3px solid black;
+   font-weight: bold;
+}
+
+#tarifs td.rouge
+{
+   background-color: #FF8566;   
+}
+
+/*==================================================================*/
+/*                                                                  */
+/*==================================================================*/
+#container-iinst
+{
+   float : left ;
+}
+
+#container-papp
+{
+   float : left ;
+}
