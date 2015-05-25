@@ -3,7 +3,7 @@
 #
 # Installer via update-rc.d teleinfo defaults
 
-SRV_PATH=/home/pi/EDF/TeleRasp/teleinfo.py
+SRV_PATH=/home/pi/EDF/telerasp/teleinfo.py
 PYTHON=/usr/bin/python
 
 # Some things that run always
