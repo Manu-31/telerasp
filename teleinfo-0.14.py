@@ -559,6 +559,7 @@ def insertTeleinfoMySQL(ti) :
       logging.error("[insertTeleinfoMySQL] : mySQL err")
 
    finally :
+      logging.error("[insertTeleinfoMySQL] : on ferme")
       cursor.close()
       dbCnx.close()
 
@@ -589,9 +590,10 @@ def getLastTeleinfoFromDataBase() :
 #      result['time'] = row['time'] # Bizzarement le time est reconnu en delta
 
    except MySQLdb.Error as e:
-      logging.error("[insertTeleinfoMySQL] : mySQL err")
+      logging.error("[getLastTeleinfoFromDataBase] : mySQL err")
 
    finally :
+      logging.error("[getLastTeleinfoFromDataBase] : bon, ben on ferme !")
       cursor.close()
       dbCnx.close()
 
@@ -785,9 +787,10 @@ def puissanceCumulee(dateDebut, timeDebut, dateFin, timeFin) :
          bbrhpjr-=row['bbrhpjr']
 
    except MySQLdb.Error as e:
-      logging.error("[insertTeleinfoMySQL] : mySQL err")
+      logging.error("[puissanceCumulee] : mySQL err")
 
    finally :
+      logging.error("[puissanceCumulee] : on ferme ...")
       cursor.close()
       dbCnx.close()
 

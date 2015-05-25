@@ -1,3 +1,5 @@
    Tentative de manipulation des informations teleinfo d'EDF par un
 Raspberry Pi.
 
+   En cours : faire en sorte qu'une impossibilité de commuuniquer avec
+le sgbd ne plante pas définitivement le programme, ...
