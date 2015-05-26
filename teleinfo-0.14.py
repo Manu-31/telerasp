@@ -505,13 +505,13 @@ def connectMySQL() :
       return connexion
 
    except MySQLdb.Error, e:
-      try:
-         logging.error( "MySQL Error [%d]: %s" % (e.args[0], e.args[1]))
-      except IndexError:
-         logging.error("MySQL Error: %s" % str(e))
+%      try:
+         logging.error( "[connectMySQL] Error [%d]: %s" % (e.args[0], e.args[1]))
+%      except IndexError:
+%         logging.error("[connectMySQL] Error: %s" % str(e))
       finally :
-         raise e
-
+%         raise e
+         return NULL
 #-------------------------------------------------------------
 # Insertion d'un jeu de mesure dans la base mySQL
 #-------------------------------------------------------------
@@ -544,6 +544,10 @@ def insertTeleinfoMySQL(ti) :
       if ('mysql' in debugFlags):
          logging.info("[insertTeleinfoMySQL] connexion a la base")
       dbCnx = connectMySQL()
+      if (dbCnx == NULL) :
+         if ('mysql' in debugFlags):
+            logging.info("[insertTeleinfoMySQL] connexion impossible on essaiera plus tard ...")
+         return
       if ('mysql' in debugFlags):
          logging.info("[insertTeleinfoMySQL] creation du curseur")
       cursor = dbCnx.cursor()
@@ -559,9 +563,11 @@ def insertTeleinfoMySQL(ti) :
       logging.error("[insertTeleinfoMySQL] : mySQL err")
 
    finally :
-      logging.error("[insertTeleinfoMySQL] : on ferme")
+      logging.error("[insertTeleinfoMySQL] : on ferme le curseur ...")
       cursor.close()
+      logging.error("[insertTeleinfoMySQL] : on ferme la connexion ...")
       dbCnx.close()
+      logging.error("[insertTeleinfoMySQL] : c'est fini ...")
 
 #-------------------------------------------------------------
 # Recuperation depuis la base de donnees du dernier
@@ -636,6 +642,9 @@ def processOneFrame(tr) :
    else:
       logging.info('Trame erronnee ...')
       nbTramesErronnees += 1
+
+   if ('frame' in debugFlags) :
+      print "[processOneFrame] Fin de traitement de la trame"
 
 #-------------------------------------------------------------
 # Mise a jour horaire des tableaux a afficher
