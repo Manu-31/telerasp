@@ -9,7 +9,7 @@
 #   type Queue.
 #   . Le second passe son temps a les consommer dans la Queue
 #   et a les transformer en teleinfo puis les envoyer dans la
-#   base de donnees. Chaqueteleinfo remplace la precedente dans
+#   base de donnees. Chaque teleinfo remplace la precedente dans
 #   la variable globale du meme nom. Ainsi les autres threads
 #   disposent toujours dans cette variable des informations
 #   les plus a jour.
@@ -66,7 +66,10 @@
 #     . Pourquoi les trames sont parfois erronees ?
 #       Apparemment ca viendrait du mode debug de flask
 #=============================================================
-teleinfoVersion = "0.14"    # On ne se connecte a la base SQL que
+teleinfoVersion = "0.15"    # Traitement des cas d'erreur afin d'etre
+                            # robuste face aux soucis d'acces a la BD
+                            # remplacement de certains print par du log
+#teleinfoVersion = "0.14"   # On ne se connecte a la base SQL que
                             # lorsque necessaire
 #teleinfoVersion = "0.13"   # On passe a MySQLdb
 #teleinfoVersion = "0.12"   # Fusion de useThread et useDataBase
@@ -106,7 +109,8 @@ teleinfoVersion = "0.14"    # On ne se connecte a la base SQL que
 debugFlags={
 #   'serial',   # Sur le port serie
 #   'bytes',    # Octet par octet !
-#   'frames',   # La gestion des trames
+#   'frame',    # La gestion des trames
+#   'dumpframe',# Le contenue des trames
 #   'web',      # L'affichage de pages
 #   'mysql'     # L'acces a la BD
 }
@@ -369,7 +373,7 @@ def teleinfoReadFrame(fd, oneShot=True):
    # On lit sans s'arreter (il y aura un return si oneShot)
    while (True) :
       if ('serial' in debugFlags) :
-         logging.info("[teleinfoReadFrame] read a frame from "+ devicePath)
+         logging.info("[teleinfoReadFrame] reading a frame from "+ devicePath)
 
       cp = c
       c = os.read(fd, 1)
@@ -395,19 +399,22 @@ def teleinfoReadFrame(fd, oneShot=True):
          cp = c
          c = os.read(fd, 1)
 
+      if ('serial' in debugFlags) :
+         logging.info("[teleinfoReadFrame] frame built from "+ devicePath)
+
       # Si on en voulait qu'une, on la renvoie
       if (oneShot) :
          if ('frame'  in debugFlags) :
-            print "[teleinfoReadFrame] Je renvoie une trame datee : "
-            print trame
-            print "------------------------------------"
+            logging.info("[teleinfoReadFrame] Je renvoie une trame datee : ")
+            logging.info(trame)
+            logging.info("------------------------------------")
          return {'trame': trame, 'datetime' : datetime.datetime.now()}
       # Sinon on insere dans la file
       else : 
          if ('frame'  in debugFlags) :
-            print "[teleinfoReadFrame] J'insere une trame datee : "
-            print trame
-            print "------------------------------------"
+            logging.info("[teleinfoReadFrame] J'insere une trame datee : ")
+            logging.info(trame)
+            logging.info("------------------------------------")
          # WARNING un try catch sur l'insertion
          try :
             fileDeTrames.put({'trame': trame, 'datetime' : datetime.datetime.now()})
@@ -491,14 +498,16 @@ def printTeleinfo(ti) :
 #=============================================================
 
 #-------------------------------------------------------------
-# Connexion a la base mySQL
+# Connexion a la base mySQL.
+# Valeur de retour :
+#    une connexion en  cas de succes
+#    None en cas d'echec
 #-------------------------------------------------------------
 def connectMySQL() :
    
    if ('mysql' in debugFlags) :
       logging.info("[connectMySQL] Connexion en cours ...")
    try:
-      logging.info("[connectMySQL] aaaa ...")
       connexion = MySQLdb.connect(
          host=mySQLServer,
          user=mySQLUserName,
@@ -508,14 +517,8 @@ def connectMySQL() :
          logging.info("[connectMySQL] Connecte a la base")
 
    except MySQLdb.Error, e:
-      logging.info("[connectMySQL] bbbb ...")
       connect = None
-#      try:
       logging.error( "[connectMySQL] Error [%d]: %s" % (e.args[0], e.args[1]))
-#      except IndexError:
-#         logging.error("[connectMySQL] Error: %s" % str(e))
-#      finally :
-#         raise e
    finally :
       if ('mysql' in debugFlags) :
          logging.info("[connectMySQL] Fin de connexion ...")
@@ -550,19 +553,22 @@ def insertTeleinfoMySQL(ti) :
    )
 
    try :
+      # On essaie de se connecter a la base
       if ('mysql' in debugFlags):
          logging.info("[insertTeleinfoMySQL] connexion a la base")
       dbCnx = connectMySQL()
-      logging.info("[insertTeleinfoMySQL] cccc")
+      # On abandonne si la connexion a echoue
       if (dbCnx is None) :
-         logging.info("[insertTeleinfoMySQL] dddd")
          if ('mysql' in debugFlags):
             logging.info("[insertTeleinfoMySQL] connexion impossible on essaiera plus tard ...")
          return
-      logging.info("[insertTeleinfoMySQL] eeee")
+
+      # On essaie de creer un curseur 
       if ('mysql' in debugFlags):
          logging.info("[insertTeleinfoMySQL] creation du curseur")
       cursor = dbCnx.cursor()
+
+      # On insere dans la base
       if ('mysql' in debugFlags):
          logging.info("[insertTeleinfoMySQL] va inserer dans la base")
       cursor.execute(addTeleinfo, dataTeleinfo)
@@ -572,14 +578,17 @@ def insertTeleinfoMySQL(ti) :
       if ('mysql' in debugFlags) :
          logging.info("[insertTeleinfoMySQL] Commit done")
    except MySQLdb.Error as e:
-      logging.error("[insertTeleinfoMySQL] : mySQL err")
+      logging.error("[insertTeleinfoMySQL] : erreur MySQL")
 
    finally :
       logging.error("[insertTeleinfoMySQL] : on ferme le curseur ...")
       cursor.close()
-      logging.error("[insertTeleinfoMySQL] : on ferme la connexion ...")
-      dbCnx.close()
-      logging.error("[insertTeleinfoMySQL] : c'est fini ...")
+      if (not (dbCnx is None)) :
+         if ('mysql' in debugFlags) :
+            logging.error("[insertTeleinfoMySQL] : on ferme la connexion ...")
+         dbCnx.close()
+      if ('mysql' in debugFlags) :
+         logging.error("[insertTeleinfoMySQL] : c'est fini ...")
 
 #-------------------------------------------------------------
 # Recuperation depuis la base de donnees du dernier
@@ -626,7 +635,7 @@ def processOneFrame(tr) :
    global teleinfo
    global nbTramesErronnees
    if ('frame' in debugFlags) :
-      print "[processOneFrame] J'ai une trame"
+      logging.info("[processOneFrame] J'ai une trame")
 
    # on analyse la trame
    ti = parseFrameToTeleinfo(frame = tr['trame'])
@@ -637,7 +646,7 @@ def processOneFrame(tr) :
       ti['date'] = estampille.date()
       ti['time'] = estampille.time()
 
-      # Ca devient la teleinfo "active"
+      # Ca devient la teleinfo "active" (WARNING  : a virer)
       if ('frame' in debugFlags) :
          logging.info("[processOneFrame] On va copier")
       teleinfoLock.acquire()
@@ -656,7 +665,7 @@ def processOneFrame(tr) :
       nbTramesErronnees += 1
 
    if ('frame' in debugFlags) :
-      print "[processOneFrame] Fin de traitement de la trame"
+      logging.info("[processOneFrame] Fin de traitement de la trame")
 
 #-------------------------------------------------------------
 # Mise a jour horaire des tableaux a afficher
@@ -705,7 +714,8 @@ def frameQueueProcess(fileDeTrames) :
 
       if ('frame' in debugFlags) :
          logging.info("[frameQueueProcess] J'ai une trame :")
-         logging.info(tr['trame'])
+         if ('dumpframe' in debugFlags) :
+            logging.info(tr['trame'])
          logging.info("------------------------------------")
 
       # Traitement de la trame en question
@@ -714,7 +724,7 @@ def frameQueueProcess(fileDeTrames) :
       if ('frame' in debugFlags) :
          logging.info("[frameQueueProcess] J'ai fini de processer")
 
-      # On compte les frames et les erreurs
+      # On compte les frames et les erreurs (WARNING a mettre dans processOneFrame ?)
       nbFrames = nbFrames + 1
       if (nbFrames == nbFrameMsgLog) :
          logging.info("frameQueueProcess : " + str(nbFrameMsgLog) + " frames processed (" + str(nbTramesErronnees) + " errors)")
