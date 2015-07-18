@@ -3,3 +3,51 @@ Raspberry Pi.
 
    En cours : faire en sorte qu'une impossibilité de commuuniquer avec
 le sgbd ne plante pas définitivement le programme, ...
+
+
+1 - Description généale
+
+   A faire ;-)
+
+2 - Configuration
+
+   La configuration est réalisée à l'aide du module ConfigParser. Les
+fichiers lus sont, dans l'ordre 
+
+   /etc/teleinfo.cfg
+   ~/.teleinfo.cfg
+
+   A priori le premier suffit, mais le second permet de faire des
+tests de débogage avec un utilisateur non root.
+
+  2.1 - Structure des fichiers de config
+
+   Les sections suivantes sont définies
+
+[general]
+[contrat]
+[source]
+[web]
+[database]
+[debug]
+
+  2.6 - La base de données
+
+  Pour le moment, seul mysql est supporté. Il est configuré de la
+façon suivante
+
+[database]
+mysqlserver = <nom du serveur>
+mysqlusername = <login utilisateur>
+mysqlpassword = <password utilsateur>
+mysqldatabase = <nom de la base>
+mysqltable = <nom de la table>
+
+  Une file d'attente est utilisée pour bufferiser les trames lues
+avant de les insérer dans la base. Le backlog est la longueur max de
+cette file. Les trames sont produites à une fréquence d'envion 25 par
+minute. 
+
+backlog = <longueur max de la file>
+
+  2.7 - Le debogage

@@ -68,7 +68,9 @@
 #     . Pourquoi les trames sont parfois erronees ?
 #       Apparemment ca viendrait du mode debug de flask
 #=============================================================
-teleinfoVersion = "0.15"    # Traitement des cas d'erreur afin d'etre
+teleinfoVersion = "0.16"    # Au boulot sur le web
+                            # Support de lecture erronee d'un caractere 
+#teleinfoVersion = "0.15"   # Traitement des cas d'erreur afin d'etre
                             # robuste face aux soucis d'acces a la BD
                             # remplacement de certains print par du log
 #teleinfoVersion = "0.14"   # On ne se connecte a la base SQL que
@@ -383,7 +385,7 @@ def teleinfoReadFrame(fd, oneShot=True):
 #      n = 0
 
 #      print("On attend la fin de la trame en cours\n")
-      while (not((ord(c) == 0x02) and (ord(cp) == 0x03))) :
+      while (c and ((not((ord(c) == 0x02) and (ord(cp) == 0x03))))) :   # Attention si lecture ratee c nulle
          cp = c
          c = os.read(fd, 1)
 #         sys.stdout.write(hex(ord(c)) + " ")
@@ -396,7 +398,7 @@ def teleinfoReadFrame(fd, oneShot=True):
       cp = c
       c = os.read(fd, 1)
       trame = ""
-      while (not(ord(c) == 0x03)) :
+      while (c and (not(ord(c) == 0x03))) :   # Attention si lecture ratee c nulle
          trame = trame + c
          cp = c
          c = os.read(fd, 1)
@@ -451,7 +453,7 @@ def parseFrameToTeleinfo(frame) :
          if (somme != ord(line[len(line) -2])) :
             logging.error("parseFrameToTeleinfo : frame error")
             logging.error("   Line : " + line)
-            logging.error("   somme : " + str(somme) + " != " + line[len(line)-2])
+            logging.error("   somme : " + str(somme) + " != " + str(ord(line[len(line)-2])))
 
             return None
 
@@ -623,9 +625,12 @@ def getLastTeleinfoFromDataBase() :
       if ('mysql' in debugFlags):
          logging.info("[getLastTeleinfoFromDataBase] connexion a la base")
       dbCnx = connectMySQL()
+      if (dbCnx is None) :
+         logging.error("[getLastTeleinfoFromDataBase] impossible de se connecter")
+         return None
       if ('mysql' in debugFlags):
          logging.info("[getLastTeleinfoFromDataBase] creation du curseur")
-      cursor = dbCnx.cursor(dictionary=True)
+      cursor = dbCnx.cursor(MySQLdb.cursors.DictCursor)
       requete = ("SELECT * FROM teleinfo ORDER BY date DESC, time DESC LIMIT 1")
       if ('mysql' in debugFlags):
          logging.info("[getLastTeleinfoFromDataBase] execution de la requete")
@@ -635,11 +640,13 @@ def getLastTeleinfoFromDataBase() :
          result = copy.deepcopy(row)
 #      result['time'] = row['time'] # Bizzarement le time est reconnu en delta
 
-   except MySQLdb.Error as e:
+#   except MySQLdb.Error as e:
+   except :
       logging.error("[getLastTeleinfoFromDataBase] : mySQL err")
 
    finally :
-      logging.error("[getLastTeleinfoFromDataBase] : bon, ben on ferme !")
+      if ('mysql' in debugFlags):
+         logging.info("[getLastTeleinfoFromDataBase] : bon, ben on ferme !")
       cursor.close()
       dbCnx.close()
 
@@ -696,7 +703,8 @@ def hourlyUpdate() :
 
    # On cherche les mesures horaires
    for summary in summaries :
-      print "On passe a '"+summary['name'] + "' : "+str(len(summary['series'])) + "/" + str(summary['nbMax']) + " series"
+      if ('periodic' in debugFlags) :
+         logging.info("[hourlyUpdate] On passe a '"+summary['name'] + "' : "+str(len(summary['series'])) + "/" + str(summary['nbMax']) + " series")
 
       # 1 - On cherche la datetime exacte de la premiere mesure
       startTime = datetime.datetime.now() + summary['startTime']
@@ -706,7 +714,8 @@ def hourlyUpdate() :
          startTime = startTime.replace(minute=0)
          if (summary['step'].seconds % (24*3600) == 0) :
             startTime = startTime.replace(hour=0)
-      print "  Ca commence a " + startTime.strftime("%x - %X")
+      if ('periodic' in debugFlags) :
+         logging.info("[hourlyUpdate] Ca commence a " + startTime.strftime("%x - %X"))
 
    if ('periodic' in debugFlags) :
       logging.info("[hourlyUpdate] Done !")
@@ -726,7 +735,7 @@ def frameQueueProcess(fileDeTrames) :
    while (True) :
       # On va chercher une {trame, datetime} dans la file
       if ('frame' in debugFlags) :
-         logging.info("[frameQueueProcess] J'attends une trame")
+         logging.info("[frameQueueProcess] J'attends une trame (file de longueur "+str(fileDeTrames.qsize())+")")
       try :
          tr = fileDeTrames.get(True)
       except :
@@ -790,7 +799,7 @@ def puissanceCumulee(dateDebut, timeDebut, dateFin, timeFin) :
       dbCnx = connectMySQL()
       if ('mysql' in debugFlags):
          logging.info("[puissanceCumulee] creation du curseur")
-      cursor = dbCnx.cursor(dictionary=True)
+      cursor = dbCnx.cursor(MySQLdb.cursors.DictCursor)
 
       # On cherche le dernier avant la date de fin
 #   print "On cherche le dernier avant fin : "+ timeFin.strftime("%X") + " : "+ dateFin.strftime("%x")
@@ -946,6 +955,9 @@ def lireClef(clef):
 @app.route("/json/<clef>")
 def lireClefJSON(clef):
    ti = webGetLastTeleinfo()
+
+   if ('web' in debugFlags) :
+      logging.info("[lireClefJSON] clef = "+clef+" valeur = "+str(ti[clef]))
 
    return Response(json.dumps(int(ti[clef])),mimetype='application/json')
 

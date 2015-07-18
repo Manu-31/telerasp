@@ -175,9 +175,9 @@ function lirePuissance() {
                 shift = series.data.length > 20; // shift if the series is 
                                                  // longer than 20
 
-            //alert(typeof(point));
+            alert(typeof(point));
             // add the point
-            chartPuissance.series[0].addPoint(point, true, shift);
+            chartPuissance.series[0].addPoint( point, true, shift);
             
             // call it again after 30 second
             setTimeout(lirePuissance, 30000);    
@@ -194,9 +194,11 @@ function lireIinst() {
     $.ajax({
         url: 'http://192.168.10.104:8081/json/iinst',
         success: function(point) {
+            console.log("Coucou\n")
             var chartIinst = $('#container-iinst').highcharts(),
                 series = chartIinst.series[0];
 
+            alert("Coucou");
             // add the point
             series.addPoint(point, true, true);
             
