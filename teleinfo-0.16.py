@@ -376,11 +376,13 @@ def teleinfoReadFrame(fd, oneShot=True):
 
    # On lit sans s'arreter (il y aura un return si oneShot)
    while (True) :
+      logging.info("LECTURE DEBUT\n")
       if ('serial' in debugFlags) :
          logging.info("[teleinfoReadFrame] reading a frame from "+ devicePath)
 
       cp = c
       c = os.read(fd, 1)
+      logging.info("LECTURE PARTIE\n")
 #      sys.stdout.write(hex(ord(c)) + " ")
 #      n = 0
 
@@ -396,12 +398,16 @@ def teleinfoReadFrame(fd, oneShot=True):
 #            n = n + 1 
 #   print("On passe a la suite\n")
       cp = c
+      logging.info("DEBUT TRAME\n")
       c = os.read(fd, 1)
+      logging.info("CETS GO\n")
       trame = ""
       while (c and (not(ord(c) == 0x03))) :   # Attention si lecture ratee c nulle
          trame = trame + c
          cp = c
          c = os.read(fd, 1)
+
+      logging.info("LECTURE FIN\n")
 
       if ('serial' in debugFlags) :
          logging.info("[teleinfoReadFrame] frame built from "+ devicePath)

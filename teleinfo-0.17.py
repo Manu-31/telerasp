@@ -301,7 +301,7 @@ def signal_handler(signal, frame):
    global threadLecture
    global threadSauvegarde
 
-   logging.info("Arret en cours")
+   logging.info("[signal_handler} signal recu, Arret en cours")
 
    # On previent les threads
    shutDown = True
@@ -462,6 +462,7 @@ def printTeleinfo(ti) :
 #-------------------------------------------------------------
 def frameQueueProcess(fileDeTrames, teleinfoQueue) :
    global shutDown
+   global populateDataBase
 
    if ('thread' in debugFlags) :
       logging.info("[frameQueueProcess] Starting")
@@ -496,7 +497,7 @@ def frameQueueProcess(fileDeTrames, teleinfoQueue) :
          updateData(teleinfo)
 
       # Si on peuple la base de donnees, on envoie
-      if (populateDatabase):
+      if (populateDataBase):
          if ('frame' in debugFlags) :
             logging.info("[frameQueueProcess] On insere dans la file de teleinfo (taille "+ str(teleinfoQueue.qsize())+")")
          try :
@@ -834,6 +835,18 @@ def frameToTeleinfo(tr) :
       logging.info("[frameToTeleinfo] Fin de traitement de la trame")
 
    return ti
+
+#-------------------------------------------------------------
+# Cette fonction passe son temps a lire les donnees depuis
+# la sauvegarde et a mettre a jour les donnees locales
+#-------------------------------------------------------------
+def getData() :
+   if ('thread' in debugFlags) :
+      logging.info("[getData] starting")
+
+   if ('thread' in debugFlags) :
+      logging.info("[getData] shutting down")
+
 
 #-------------------------------------------------------------
 # Calcul de la puissance consommee entre deux dates.
@@ -1309,6 +1322,10 @@ if (readFrames) :
 if (populateDataBase) :
    threadSauvegarde = threading.Thread(target=saveTeleinfo, args=(teleinfoQueue, ))
    threadSauvegarde.start()
+
+# Le thread de recuperation des donnees
+if (runWebServer and not readFrames) :
+   threadGetData = threading.Thread(target=getData)
 
 # On demarre le serveur web
 if __name__ == "__main__":
