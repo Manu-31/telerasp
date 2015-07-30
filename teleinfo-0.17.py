@@ -1,20 +1,39 @@
 #=============================================================
 #   Une premiere tentative de manipulation des trames teleinfo
 #
-#   Structure generale
+#   1 - Structure generale
+#   (voir aussi le dessin principe.odg qui illutre la chose)
 #
-#   Ce programme cree deux threads pour l'archivage des donnees
+#   Ce programme cree des threads pour la lecture, l'archivage
+#   et l'affichage des donnees. L'idee est d'avoir dans un
+#   seul programme tous les outils, mais ne de pas necessairement
+#   les utiliser simultanement.
+#
+#   Le role de chacun des threads est le suivant
+#
 #   . Le premier passe son temps a lire des trames sur le port
 #   serie et les stocke dans une file de trames horodatees de
-#   type Queue.
-#   . Le second passe son temps a les consommer dans la Queue
-#   et a les transformer en teleinfo puis les envoyer dans la
-#   base de donnees. Chaque teleinfo remplace la precedente dans
+#   type Queue : frameQueue. La fonction qu'il execute est
+#   teleinfoReadFrame
+#
+#   . Le deuxieme passe son temps a les consommer dans la Queue
+#   et a les transformer en teleinfo puis les envoyer dans une
+#   autre file (teleinfoQueue) destinee a de la sauvegarde et/ou
+#   a les integrer dans les donnees locales pour affichage.
+#
+#   . Le troisieme thread execute la fonction saveTeleinfo
+#   dont le boulot est de sauvegarder les donnees (pour le
+#   moment par envoie dans une bd via du sql).
+#
+#   . Le quatrieme va chercher des donnees sauvegardees
+#   pour mettre a jour les donnees locales pour affichage.
+
+#   Chaque teleinfo remplace la precedente dans
 #   la variable globale du meme nom. Ainsi les autres threads
 #   disposent toujours dans cette variable des informations
 #   les plus a jour.
 #
-#   Principaux "types"
+#   2 - Principaux "types"
 #
 #   . Les trames lues par teleinfoReadFrame sont codees comme
 #   une simple chaine de caracteres
@@ -50,7 +69,7 @@
 #     . ajouter un debug flag queue 
 #     . Ajouter une option de choix du fichier de conf
 #     . Un cache des donnees des pages !
-#     . diffents modes de debug configures par le fichier
+#     . differents modes de debug configures par le fichier
 #     . une page de config, meme sans edition
 #     . un fichier de configuration (qui permettra un comportement
 #     different pour root !) avec ConfigParser
@@ -199,6 +218,10 @@ mySQLDataBase = 'Domotique'
 
 # La table (WARNING : pas utilise !)
 mySQLTable = 'teleinfo'
+
+# La gestion du backlog
+backlogMin = 20
+dbSaveDelay = 60
 
 #-------------------------------------------------------------
 # Le serveur web
@@ -544,7 +567,7 @@ def connectMySQL() :
 #-------------------------------------------------------------
 # Insertion d'un jeu de mesure dans la base mySQL
 #-------------------------------------------------------------
-def insertTeleinfoMySQL(ti) :
+def insertTeleinfoMySQL(ti, cursor) :
    addTeleinfo =  ("INSERT INTO teleinfo "
                    "(date, time, adco, optarif, isousc, bbrhcjb, bbrhpjb, bbrhcjw, bbrhpjw, bbrhcjr, bbrhpjr, ptec, demain, iinst, imax, papp, hhphc, motdetat) "
                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)")
@@ -568,56 +591,16 @@ def insertTeleinfoMySQL(ti) :
       ti['hhphc'],
       ti['motdetat']
    )
-   succes = False
 
-   while (not succes) :
-      try :
-         # On essaie de se connecter a la base
-         if ('mysql' in debugFlags):
-            logging.info("[insertTeleinfoMySQL] connexion a la base")
-         dbCnx = connectMySQL()
-         # On abandonne si la connexion a echoue
-         if (dbCnx is None) :
-            if ('mysql' in debugFlags):
-               logging.info("[insertTeleinfoMySQL] connexion impossible on essaiera plus tard ...")
-            return
+   if ('mysql' in debugFlags):
+      logging.info("[insertTeleinfoMySQL] va inserer dans la base")
 
-         # On essaie de creer un curseur 
-         if ('mysql' in debugFlags):
-            logging.info("[insertTeleinfoMySQL] creation du curseur")
-         cursor = dbCnx.cursor()
+   try :
+      # On insere dans la base
+      cursor.execute(addTeleinfo, dataTeleinfo)
 
-         # On insere dans la base
-         if ('mysql' in debugFlags):
-            logging.info("[insertTeleinfoMySQL] va inserer dans la base")
-         cursor.execute(addTeleinfo, dataTeleinfo)
-         if ('mysql' in debugFlags):
-            logging.info( "[insertTeleinfoMySQL] insertion faite, on passe au commit")
-         dbCnx.commit()
-         if ('mysql' in debugFlags) :
-            logging.info("[insertTeleinfoMySQL] Commit done")
-         succes = True
-      except MySQLdb.Error as e:
-         logging.error("[insertTeleinfoMySQL] : erreur MySQL")
-         succes = False
-      finally :
-         if (not (dbCnx is None)) :
-            if ('mysql' in debugFlags) :
-               logging.info("[insertTeleinfoMySQL] : on ferme le curseur ...")
-            cursor.close()
-            if ('mysql' in debugFlags) :
-               logging.info("[insertTeleinfoMySQL] : on ferme la connexion ...")
-            dbCnx.close()
-         if ('mysql' in debugFlags) :
-            logging.info("[insertTeleinfoMySQL] : connexion closed ...")
-
-      if (succes) :
-         if ('mysql' in debugFlags) :
-            logging.info("[insertTeleinfoMySQL] : et c'est un succes ...")
-      else :
-         if ('mysql' in debugFlags) :
-            logging.info("[insertTeleinfoMySQL] : On attend "+str(dbFailedDelay)+" secondes avant de re-essayer")
-         time.sleep(dbFailedDelay)
+   except MySQLdb.Error :
+      logging.error("[insertTeleinfoMySQL] : erreur MySQL")
 
    if ('mysql' in debugFlags) :
       logging.info("[insertTeleinfoMySQL] : Termine ...")
@@ -680,17 +663,64 @@ def saveTeleinfo(teleinfoQueue):
       logging.info("[saveTeleinfo] Starting")
 
    while (not shutDown) :
-      # On va chercher une teleinfo
-      if ('frame' in debugFlags) :
-         logging.info("[saveTeleinfo] J'attends une trame (file de longueur "+str(teleinfoQueue.qsize())+")")
-      try :
-         ti = teleinfoQueue.get(True)
-      except :
-         logging.error("[saveTeleinfo] Probleme d'extraction :" + sys.exc_info()[0])
+      # On attend d'avoir au moins backlogMin info a sauvegarder
+      while (teleinfoQueue.qsize() < backlogMin):
+         if ('frame' in debugFlags) :
+            logging.info("[saveTeleinfo] file de longueur "+str(teleinfoQueue.qsize())+" trop courte, j'attends")
+         time.sleep(dbSaveDelay)
 
-      # On l'insere dans la BD
-      insertTeleinfoMySQL(ti)
+      # On se connecte a la BD
+      if ('mysql' in debugFlags):
+         logging.info("[insertTeleinfoMySQL] connexion a la base")
 
+      dbCnx = connectMySQL()
+
+      if (dbCnx is not None) : # Si ca a marche
+         # On essaie de creer un curseur 
+         if ('mysql' in debugFlags):
+            logging.info("[insertTeleinfoMySQL] creation du curseur")
+         cursor = dbCnx.cursor()
+
+         # On vide la file dans la connexion
+         while (teleinfoQueue.qsize() > 0) :
+
+            # On va chercher une teleinfo
+            if ('frame' in debugFlags) :
+               logging.info("[saveTeleinfo] J'attends une trame (file de longueur "+str(teleinfoQueue.qsize())+")")
+            try :
+               ti = teleinfoQueue.get(False)
+
+               # On l'insere dans la BD
+               insertTeleinfoMySQL(ti, cursor)
+
+            except Queue.Empty :
+               logging.error("[saveTeleinfo] C'est bon j'ai vide la file !")
+
+         # C'est fini, on commit
+         if ('mysql' in debugFlags):
+            logging.info( "[insertTeleinfoMySQL] insertion faite, on passe au commit")
+
+         dbCnx.commit()
+
+         if ('mysql' in debugFlags) :
+            logging.info("[insertTeleinfoMySQL] Commit done")
+
+         # L'affaire est pliee, on ferme la connexion
+         if (not (dbCnx is None)) :
+            if ('mysql' in debugFlags) :
+               logging.info("[insertTeleinfoMySQL] : on ferme le curseur ...")
+            cursor.close()
+            if ('mysql' in debugFlags) :
+               logging.info("[insertTeleinfoMySQL] : on ferme la connexion ...")
+            dbCnx.close()
+         if ('mysql' in debugFlags) :
+            logging.info("[insertTeleinfoMySQL] : connexion closed ...")
+
+      else : # Si c'est rate, on essaiera plus tard
+         if ('mysql' in debugFlags):
+            logging.info("[insertTeleinfoMySQL] connexion impossible on essaiera plus tard ...")
+            logging.info("[insertTeleinfoMySQL] : On attend "+str(dbFailedDelay)+" secondes avant de re-essayer")
+         time.sleep(dbFailedDelay)
 
    if ('thread' in debugFlags) :
       logging.info("[saveTeleinfo] Stopping")
