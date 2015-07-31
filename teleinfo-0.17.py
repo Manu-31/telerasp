@@ -88,6 +88,7 @@
 #       Apparemment ca viendrait du mode debug de flask
 #=============================================================
 teleinfoVersion = "0.17"    # Restructuration des threads
+                            # Sauvegarde par batch (max nbMaxBeforeCommit)
 
 #teleinfoVersion = "0.16"   # Au boulot sur le web
                             # Support de lecture erronee d'un caractere 
@@ -222,6 +223,7 @@ mySQLTable = 'teleinfo'
 # La gestion du backlog
 backlogMin = 20
 dbSaveDelay = 60
+nbMaxBeforeCommit = 100         
 
 #-------------------------------------------------------------
 # Le serveur web
@@ -658,6 +660,7 @@ def getLastTeleinfoFromDataBase() :
 #-------------------------------------------------------------
 def saveTeleinfo(teleinfoQueue):
    global shutDown
+   global nbMaxBeforeCommit
 
    if ('thread' in debugFlags) :
       logging.info("[saveTeleinfo] Starting")
@@ -671,18 +674,19 @@ def saveTeleinfo(teleinfoQueue):
 
       # On se connecte a la BD
       if ('mysql' in debugFlags):
-         logging.info("[insertTeleinfoMySQL] connexion a la base")
+         logging.info("[saveTeleinfo] connexion a la base")
 
       dbCnx = connectMySQL()
 
       if (dbCnx is not None) : # Si ca a marche
          # On essaie de creer un curseur 
          if ('mysql' in debugFlags):
-            logging.info("[insertTeleinfoMySQL] creation du curseur")
+            logging.info("[saveTeleinfo] creation du curseur")
          cursor = dbCnx.cursor()
 
+         nbInsert = 0
          # On vide la file dans la connexion
-         while (teleinfoQueue.qsize() > 0) :
+         while ((teleinfoQueue.qsize() > 0) and (nbInsert < nbMaxBeforeCommit)):
 
             # On va chercher une teleinfo
             if ('frame' in debugFlags) :
@@ -692,35 +696,38 @@ def saveTeleinfo(teleinfoQueue):
 
                # On l'insere dans la BD
                insertTeleinfoMySQL(ti, cursor)
+               nbInsert = nbInsert + 1
 
             except Queue.Empty :
                logging.error("[saveTeleinfo] C'est bon j'ai vide la file !")
 
          # C'est fini, on commit
          if ('mysql' in debugFlags):
-            logging.info( "[insertTeleinfoMySQL] insertion faite, on passe au commit")
+            logging.info( "[saveTeleinfo] insertion faite, on passe au commit")
 
          dbCnx.commit()
 
          if ('mysql' in debugFlags) :
-            logging.info("[insertTeleinfoMySQL] Commit done")
+            logging.info("[saveTeleinfo] Commit done")
 
          # L'affaire est pliee, on ferme la connexion
          if (not (dbCnx is None)) :
             if ('mysql' in debugFlags) :
-               logging.info("[insertTeleinfoMySQL] : on ferme le curseur ...")
+               logging.info("[saveTeleinfo] : on ferme le curseur ...")
             cursor.close()
             if ('mysql' in debugFlags) :
-               logging.info("[insertTeleinfoMySQL] : on ferme la connexion ...")
+               logging.info("[saveTeleinfo] : on ferme la connexion ...")
             dbCnx.close()
          if ('mysql' in debugFlags) :
-            logging.info("[insertTeleinfoMySQL] : connexion closed ...")
+            logging.info("[saveTeleinfo] : connexion closed ...")
 
       else : # Si c'est rate, on essaiera plus tard
          if ('mysql' in debugFlags):
-            logging.info("[insertTeleinfoMySQL] connexion impossible on essaiera plus tard ...")
-            logging.info("[insertTeleinfoMySQL] : On attend "+str(dbFailedDelay)+" secondes avant de re-essayer")
+            logging.info("[saveTeleinfo] connexion impossible on essaiera plus tard ...")
+            logging.info("[saveTeleinfo] : On attend "+str(dbFailedDelay)+" secondes avant de re-essayer")
          time.sleep(dbFailedDelay)
+         if ('mysql' in debugFlags):
+            logging.info("[saveTeleinfo] Fin de l'attente, essayons a nouveau ...")
 
    if ('thread' in debugFlags) :
       logging.info("[saveTeleinfo] Stopping")
