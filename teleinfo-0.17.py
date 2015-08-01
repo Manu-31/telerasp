@@ -653,10 +653,6 @@ def getLastTeleinfoFromDataBase() :
 # presentes dans la file teleinfoQueue et les sauvegarder.
 #    Pour le moment (et surement pour longtemps) cette
 # sauvegarde ne peut etre que l'insertion dans une BD via mySQL.
-# 
-# WARNING pour le moment c'est nul ! il faut ouvrir la base
-# quand c'est necessaire, envoyer plein de teleinfo puis
-# attendre avant de recommencer, ...
 #-------------------------------------------------------------
 def saveTeleinfo(teleinfoQueue):
    global shutDown
@@ -690,7 +686,7 @@ def saveTeleinfo(teleinfoQueue):
 
             # On va chercher une teleinfo
             if ('frame' in debugFlags) :
-               logging.info("[saveTeleinfo] J'attends une trame (file de longueur "+str(teleinfoQueue.qsize())+")")
+               logging.info("[saveTeleinfo] J'attends une trame (lg "+str(teleinfoQueue.qsize())+" et "+str(nbInsert)+"/"+str(nbMaxBeforeCommit)+" a commit)")
             try :
                ti = teleinfoQueue.get(False)
 
