@@ -527,6 +527,8 @@ def frameQueueProcess(fileDeTrames, teleinfoQueue) :
             logging.info("[frameQueueProcess] On insere dans la file de teleinfo (taille "+ str(teleinfoQueue.qsize())+")")
          try :
             teleinfoQueue.put(teleinfo)
+            if ('frame' in debugFlags) :
+               logging.info("[frameQueueProcess] Insertion faite")
          except :
             logging.error("[teleinfoReadFrame] Probleme d'insertion :" + sys.exc_info()[0])
 
@@ -690,9 +692,13 @@ def saveTeleinfo(teleinfoQueue):
             try :
                ti = teleinfoQueue.get(False)
 
+               logging.info("[saveTeleinfo] OK, on l'envoie")
+
                # On l'insere dans la BD
                insertTeleinfoMySQL(ti, cursor)
                nbInsert = nbInsert + 1
+
+               logging.info("[saveTeleinfo] C'est fait")
 
             except Queue.Empty :
                logging.error("[saveTeleinfo] C'est bon j'ai vide la file !")
@@ -842,7 +848,7 @@ def frameToTeleinfo(tr) :
    global nbFrames
 
    if ('frame' in debugFlags) :
-      logging.info("[frameToTeleinfo] J'ai une trame")
+      logging.info("[frameToTeleinfo] Une trame a traiter")
 
    # on analyse la trame
    ti = parseFrameToTeleinfo(frame = tr['trame'])
@@ -959,7 +965,7 @@ def puissanceCumulee(dateDebut, timeDebut, dateFin, timeFin) :
       logging.error("[puissanceCumulee] : mySQL err")
 
    finally :
-      logging.error("[puissanceCumulee] : on ferme ...")
+      logging.info("[puissanceCumulee] : on ferme ...")
       cursor.close()
       dbCnx.close()
 
