@@ -2,7 +2,7 @@
 #   Une premiere tentative de manipulation des trames teleinfo
 #
 #   1 - Structure generale
-#   (voir aussi le dessin principe.odg qui illutre la chose)
+#   (voir aussi le dessin principe.odg qui illustre la chose)
 #
 #   Ce programme cree des threads pour la lecture, l'archivage
 #   et l'affichage des donnees. L'idee est d'avoir dans un
@@ -65,8 +65,11 @@
 #-------------------------------------------------------------
 #   WARNING : 
 #   - A faire
+#     . supprimer queueBacklog et remettre le fichier de config
+#       en coherence avec la gestion des files
 #     . supprimer les hourly si pas de web, non ?
 #     . ajouter un debug flag queue 
+#     . permettre une modification dynamique des parametres
 #     . Ajouter une option de choix du fichier de conf
 #     . Un cache des donnees des pages !
 #     . differents modes de debug configures par le fichier
@@ -89,7 +92,7 @@
 #=============================================================
 teleinfoVersion = "0.17"    # Restructuration des threads
                             # Sauvegarde par batch (max nbMaxBeforeCommit)
-
+                            # Davantage de cas d'erreurs traites
 #teleinfoVersion = "0.16"   # Au boulot sur le web
                             # Support de lecture erronee d'un caractere 
 #teleinfoVersion = "0.15"   # Traitement des cas d'erreur afin d'etre
@@ -188,6 +191,29 @@ clefsContrat = {
    'MOTDETAT'
 }
 
+# Ce qu'on est cense trouver dans un teleinfo
+# ca peut se deduire de ce qui precede, ... a faire !
+clefsTeleinfo = {
+   'date',
+   'time',
+   'adco',
+   'optarif',
+   'isousc',
+   'bbrhcjb',
+   'bbrhpjb',
+   'bbrhcjw',
+   'bbrhpjw',
+   'bbrhcjr',
+   'bbrhpjr',
+   'ptec',
+   'demain',
+   'iinst',
+   'imax',
+   'papp',
+   'hhphc',
+   'motdetat'
+}
+
 # Tarifs horaires (au 01/05/2013) OK
 tarifs = {
    'hcjb' : 0.0763,
@@ -221,9 +247,9 @@ mySQLDataBase = 'Domotique'
 mySQLTable = 'teleinfo'
 
 # La gestion du backlog
-backlogMin = 20
 dbSaveDelay = 60
-nbMaxBeforeCommit = 100         
+nbMaxBeforeCommit = 10         
+backlogMin = nbMaxBeforeCommit
 
 #-------------------------------------------------------------
 # Le serveur web
@@ -477,6 +503,17 @@ def printTeleinfo(ti) :
    print "Puissance app     : " + ti['papp']
    
 #-------------------------------------------------------------
+#   Une teleinfo est-elle bien formee (toutes les clefs
+# presente)
+#-------------------------------------------------------------
+def teleinfoIsOK(ti) :
+   result = True
+
+   for c in clefsTeleinfo :
+      result = result and ti.has_key(c)
+   return result
+
+#-------------------------------------------------------------
 #    Traitement continu de la file des trames horodatees
 # Ce sous programme tourne en permanence dans un thread. Il
 # passe son temps a lire les trames dans la 'fileDeTrames'.
@@ -510,28 +547,38 @@ def frameQueueProcess(fileDeTrames, teleinfoQueue) :
       # Converion de la trame en question en teleinfo
       teleinfo = frameToTeleinfo(tr)
  
-      if ('frame' in debugFlags) :
-         logging.info("[frameQueueProcess] J'ai fini de processer")
-
-      # Que fait-on de la teleinfo creee ?
-
-      # Si on fait aussi office de web server, on met a jour les donnees
-      if (runWebServer) :
-         if ('frame' in debugFlags) :
-            logging.info("[frameQueueProcess] On met a jour les donnees pour le web")
-         updateData(teleinfo)
-
-      # Si on peuple la base de donnees, on envoie
-      if (populateDataBase):
-         if ('frame' in debugFlags) :
-            logging.info("[frameQueueProcess] On insere dans la file de teleinfo (taille "+ str(teleinfoQueue.qsize())+")")
-         try :
-            teleinfoQueue.put(teleinfo)
+      if (teleinfo is not None) :
+         # On la teste, mais il n'y a aucune raison qu'elle soit foireuse
+         # on l'a testee dans frameToTeleinfo
+         if (teleinfoIsOK(teleinfo)) :
             if ('frame' in debugFlags) :
-               logging.info("[frameQueueProcess] Insertion faite")
-         except :
-            logging.error("[teleinfoReadFrame] Probleme d'insertion :" + sys.exc_info()[0])
+               logging.info("[frameQueueProcess] J'ai fini de processer une ti correcte : " + hex(id(teleinfo)))
+         else :
+            if ('frame' in debugFlags) :
+               logging.info("[frameQueueProcess] J'ai fini de processer une ti foireuse : " + hex(id(teleinfo)))
+         # Que fait-on de la teleinfo creee ?
 
+         # Si on fait aussi office de web server, on met a jour les donnees
+         if (runWebServer) :
+            if ('frame' in debugFlags) :
+               logging.info("[frameQueueProcess] On met a jour les donnees pour le web")
+            updateData(teleinfo)
+
+         # Si on peuple la base de donnees, on envoie les teleinfo
+         # dans la file idoine. Sinon, elle est detruite
+         if (populateDataBase):
+            if ('frame' in debugFlags) :
+               logging.info("[frameQueueProcess] On insere dans la file de teleinfo (taille "+ str(teleinfoQueue.qsize())+")")
+            try :
+               teleinfoQueue.put(teleinfo)
+               if ('frame' in debugFlags) :
+                  logging.info("[frameQueueProcess] Insertion faite")
+            except :
+               logging.error("[teleinfoReadFrame] Probleme d'insertion :" + sys.exc_info()[0])
+      else :
+         if ('frame' in debugFlags) :
+            logging.info("[frameQueueProcess] Elle est None, on laisse tomber")
+        
       # S'il faut s'arreter, ...
       if (shutDown) :
          logging.info("Fin du thread de traitement des donnees")
@@ -572,6 +619,10 @@ def connectMySQL() :
 # Insertion d'un jeu de mesure dans la base mySQL
 #-------------------------------------------------------------
 def insertTeleinfoMySQL(ti, cursor) :
+   if ('mysql' in debugFlags):
+      logging.info("[insertTeleinfoMySQL] va inserer dans la base")
+
+
    addTeleinfo =  ("INSERT INTO teleinfo "
                    "(date, time, adco, optarif, isousc, bbrhcjb, bbrhpjb, bbrhcjw, bbrhpjw, bbrhcjr, bbrhpjr, ptec, demain, iinst, imax, papp, hhphc, motdetat) "
                    "VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)")
@@ -596,12 +647,11 @@ def insertTeleinfoMySQL(ti, cursor) :
       ti['motdetat']
    )
 
-   if ('mysql' in debugFlags):
-      logging.info("[insertTeleinfoMySQL] va inserer dans la base")
-
    try :
+      logging.info("[insertTeleinfoMySQL] :  Cest go ...")
       # On insere dans la base
       cursor.execute(addTeleinfo, dataTeleinfo)
+      logging.info("[insertTeleinfoMySQL] :  Cest done ...")
 
    except MySQLdb.Error :
       logging.error("[insertTeleinfoMySQL] : erreur MySQL")
@@ -651,10 +701,22 @@ def getLastTeleinfoFromDataBase() :
    return result
 
 #-------------------------------------------------------------
-#   Cette fonction passe son temps a consommmer des teleinfo
+#    Cette fonction passe son temps a consommmer des teleinfo
 # presentes dans la file teleinfoQueue et les sauvegarder.
 #    Pour le moment (et surement pour longtemps) cette
 # sauvegarde ne peut etre que l'insertion dans une BD via mySQL.
+#    Elle les sauvegarde par 'lots' de nbMaxBeforeCommit au
+# plus (puis elle commit et elle ferme la connexion a la base).
+# L'interet est qu'en cas de soucis avec la BD, on n'en perd
+# pas plus, ...
+#    Elle ne sauvegade aucun lot tant qu'il n'y a pas au moins
+# backlogMin teleinfo dans la file. Ca c'est pour eviter de
+# faire une connexion a la base par teleinfo ou presque, ...
+#    Si la file contient moins de backlogMin, elle se met en
+# veille pendant dbSaveDelay secondes.
+#    En revanche, tant que la file en contient au moins 
+# backlogMin, elle enchaine les lots. Si tout se passe bien,
+# elle rattrape donc vite son retard, ...
 #-------------------------------------------------------------
 def saveTeleinfo(teleinfoQueue):
    global shutDown
@@ -665,6 +727,7 @@ def saveTeleinfo(teleinfoQueue):
 
    while (not shutDown) :
       # On attend d'avoir au moins backlogMin info a sauvegarder
+      # et si ce n'est pas le cas, on dort dbSaveDelay secondes
       while (teleinfoQueue.qsize() < backlogMin):
          if ('frame' in debugFlags) :
             logging.info("[saveTeleinfo] file de longueur "+str(teleinfoQueue.qsize())+" trop courte, j'attends")
@@ -683,7 +746,8 @@ def saveTeleinfo(teleinfoQueue):
          cursor = dbCnx.cursor()
 
          nbInsert = 0
-         # On vide la file dans la connexion
+         # On consomme des teleinfo pour les sauvegarder. Pas plus
+         # que nbMaxBeforeCommit a chaque commit
          while ((teleinfoQueue.qsize() > 0) and (nbInsert < nbMaxBeforeCommit)):
 
             # On va chercher une teleinfo
@@ -691,23 +755,31 @@ def saveTeleinfo(teleinfoQueue):
                logging.info("[saveTeleinfo] J'attends une trame (lg "+str(teleinfoQueue.qsize())+" et "+str(nbInsert)+"/"+str(nbMaxBeforeCommit)+" a commit)")
             try :
                ti = teleinfoQueue.get(False)
+               # Etrangement, il semble qu'elles soient parfois incompletes !?
+               # WARNING : pas encore compris ...
+               if (teleinfoIsOK(ti)) :
+                  logging.info("[saveTeleinfo] OK, on l'envoie : " + hex(id(ti)))
 
-               logging.info("[saveTeleinfo] OK, on l'envoie")
+                  # On l'insere dans la BD
+                  insertTeleinfoMySQL(ti, cursor)
+                  nbInsert = nbInsert + 1
 
-               # On l'insere dans la BD
-               insertTeleinfoMySQL(ti, cursor)
-               nbInsert = nbInsert + 1
+                  logging.info("[saveTeleinfo] C'est fait")
+               else :
+                  logging.info("[saveTeleinfo] Elle est foireuse on l'abandonne" + hex(id(ti)))
 
-               logging.info("[saveTeleinfo] C'est fait")
 
             except Queue.Empty :
-               logging.error("[saveTeleinfo] C'est bon j'ai vide la file !")
+               logging.error("[saveTeleinfo] File teleinfoQueue vide !")
 
          # C'est fini, on commit
          if ('mysql' in debugFlags):
             logging.info( "[saveTeleinfo] insertion faite, on passe au commit")
 
-         dbCnx.commit()
+         try :
+            dbCnx.commit()
+         except :
+            logging.error( "[saveTeleinfo] Commit failed ...")
 
          if ('mysql' in debugFlags) :
             logging.info("[saveTeleinfo] Commit done")
@@ -722,8 +794,11 @@ def saveTeleinfo(teleinfoQueue):
             dbCnx.close()
          if ('mysql' in debugFlags) :
             logging.info("[saveTeleinfo] : connexion closed ...")
-
-      else : # Si c'est rate, on essaiera plus tard
+ 
+      # Si c'est rate (connexion is None), on essaiera plus tard, pour
+      # cela on dort dbFailedDelay secondes. Notons qu'alors aucune teleinfo
+      # n'est perdue
+      else :
          if ('mysql' in debugFlags):
             logging.info("[saveTeleinfo] connexion impossible on essaiera plus tard ...")
             logging.info("[saveTeleinfo] : On attend "+str(dbFailedDelay)+" secondes avant de re-essayer")
@@ -860,13 +935,13 @@ def frameToTeleinfo(tr) :
       ti['time'] = estampille.time()
 
    else:
-      logging.info('Trame erronnee ...')
+      logging.info('[frameToTeleinfo] Trame erronnee ...')
       nbTramesErronnees += 1
 
    # On compte les frames et les erreurs
    nbFrames = nbFrames + 1
    if (nbFrames == nbFrameMsgLog) :
-      logging.info("frameQueueProcess : " + str(nbFrameMsgLog) + " frames processed (" + str(nbTramesErronnees) + " errors)")
+      logging.info("[frameToTeleinfo] " + str(nbFrameMsgLog) + " frames processed (" + str(nbTramesErronnees) + " errors)")
       nbFrames = 0
       nbTramesErronnees = 0
 
